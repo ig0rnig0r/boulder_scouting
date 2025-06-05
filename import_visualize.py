@@ -4,7 +4,6 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from scipy.ndimage import generic_filter, uniform_filter # For roughness, local relief, and potential slope smoothing
 
-# --- Existing plot_dgm_as_3d_points function (unchanged, just for context) ---
 def plot_dgm_as_3d_points(filepath, title="Digitales Geländemodell (DGM)", 
                           ax=None, sample_factor=5, z_exaggeration=1.0, 
                           cmap='terrain', alpha=0.8):
@@ -87,7 +86,95 @@ def plot_dgm_as_3d_points(filepath, title="Digitales Geländemodell (DGM)",
         print(f"An unexpected error occurred: {e}")
         return None
 
-# --- NEW FUNCTIONS FOR TERRAIN METRICS ---
+def plot_dgm_as_3d_surface(filepath, title="Digitales Geländemodell (DGM) - Surface", 
+                           ax=None, sample_factor=1, z_exaggeration=1.0, 
+                           cmap='terrain', shade=True, plot_type='surface'):
+    """
+    Reads a DGM GeoTIFF, converts it to a 3D surface or wireframe, and plots it.
+    NaN values are filled for plotting robustness.
+    
+    Args:
+        filepath (str): Path to the DGM GeoTIFF file.
+        title (str): Title for the plot.
+        ax (Axes3D, optional): Matplotlib Axes3D object to plot on. If None, a new figure is created.
+        sample_factor (int): Factor by which to sample the grid for plotting (e.g., 10 means 1 in 10 rows/cols).
+                             Use a higher number for large files to avoid memory issues and render faster.
+                             For surface plots, this is crucial.
+        z_exaggeration (float): Factor to exaggerate the Z-axis for better visual relief.
+        cmap (str): Colormap for the surface.
+        shade (bool): Whether to apply light shading to the surface (only for 'surface' plot_type).
+        plot_type (str): 'surface' for a shaded surface, 'wireframe' for lines.
+    Returns:
+        Axes3D: The matplotlib Axes3D object used for plotting.
+    """
+    if plot_type not in ['surface', 'wireframe']:
+        raise ValueError("plot_type must be 'surface' or 'wireframe'")
+
+    try:
+        with rasterio.open(filepath) as src:
+            data = src.read(1)
+            transform = src.transform
+            crs = src.crs
+            profile = src.profile
+
+            print(f"Loading {title} for {plot_type} plot from: {filepath}")
+            print(f"Original data shape: {data.shape}")
+            print(f"Resolution (x, y): {transform.a:.2f}, {transform.e:.2f}") 
+            print(f"NoData value: {profile.get('nodata')}")
+
+            # Handle NoData values for surface plotting
+            nodata_val = profile.get('nodata')
+            if nodata_val is not None:
+                # Replace nodata with NaN
+                data = np.where(data == nodata_val, np.nan, data)
+            
+            # Fill NaNs for plotting (e.g., with a small value or mean)
+            # This is CRUCIAL for plot_surface/plot_wireframe
+            data_filled = np.nan_to_num(data, nan=np.nanmin(data) - 10) # Fill with a value below min
+            
+            rows, cols = data_filled.shape
+            x_coords, y_coords = rasterio.transform.xy(transform, np.arange(rows), np.arange(cols))
+            X_grid, Y_grid = np.meshgrid(x_coords, y_coords)
+            
+            print(f"Plotting {plot_type} with sample factor: {sample_factor}")
+            
+            # --- Downsampling for plotting efficiency ---
+            # Apply sample_factor to the grids (X, Y, Z) directly
+            X_plot = X_grid[::sample_factor, ::sample_factor]
+            Y_plot = Y_grid[::sample_factor, ::sample_factor]
+            Z_plot = data_filled[::sample_factor, ::sample_factor] * z_exaggeration
+
+            if ax is None:
+                fig = plt.figure(figsize=(12, 12))
+                ax = fig.add_subplot(111, projection='3d')
+            
+            if plot_type == 'surface':
+                surf = ax.plot_surface(X_plot, Y_plot, Z_plot, 
+                                       cmap=cmap, 
+                                       rstride=1, cstride=1, # Plot every row/column of sampled grid
+                                       linewidth=0, antialiased=False,
+                                       shade=shade)
+                plt.colorbar(surf, label='Elevation (m)', shrink=0.5, aspect=10)
+            elif plot_type == 'wireframe':
+                ax.plot_wireframe(X_plot, Y_plot, Z_plot, 
+                                  rstride=1, cstride=1, # Plot every row/column of sampled grid
+                                  color='gray', linewidth=0.5)
+            
+            ax.set_xlabel('X Coordinate (m)') 
+            ax.set_ylabel('Y Coordinate (m)') 
+            ax.set_zlabel('Z Elevation (m)')
+            ax.set_title(title)
+            
+            return ax
+
+    except rasterio.errors.RasterioIOError as e:
+        print(f"Error reading GeoTIFF {filepath}: {e}")
+        return None
+    except Exception as e:
+        print(f"An unexpected error occurred: {e}")
+        return None
+
+# --- TERRAIN METRICS ---
 
 def calculate_roughness(dem_data, window_size=3):
     """
@@ -175,8 +262,9 @@ def plot_2d_raster(data, title, cmap='viridis', figsize=(10, 10), cbar_label='Va
 if __name__ == "__main__":
     # --- IMPORTANT: Replace this with your actual DGM file path ---
     # dgm_filepath = 'data/maltatal/steinbruch/dgm_4622-5002a.tif'
-    dgm_filepath = 'data/vassach/dgm_5017-5002a.tif'
-    
+    dgm_filepath = 'data/maltatal/schleierwasserfall/dgm_4621-5103a.tif'
+    # dgm_filepath = 'data/vassach/dgm_5017-5002a.tif'
+    # dgm_filepath = 'data/zajesera/dgm_4916-5002a.tif'
 
     # --- Load DGM Data ---
     # We need to load the full DGM data to pass to calculation functions,
@@ -201,22 +289,31 @@ if __name__ == "__main__":
         print("Exiting script as DGM data is essential.")
         exit() # Exit if DGM data cannot be loaded
 
-    # --- Plot DGM (3D Point Cloud) ---
-    print("\n--- Plotting DGM (3D Point Cloud) ---")
-    dgm_ax = plot_dgm_as_3d_points(dgm_filepath, sample_factor=5)
-    if dgm_ax:
-        dgm_ax.view_init(elev=45, azim=-60) # Adjust view angle as desired
-        plt.tight_layout()
-        plt.show()
+    # # --- Plot DGM (3D Point Cloud) ---
+    # print("\n--- Plotting DGM (3D Point Cloud) ---")
+    # dgm_ax = plot_dgm_as_3d_points(dgm_filepath, sample_factor=5)
+    # if dgm_ax:
+    #     dgm_ax.view_init(elev=45, azim=-60) # Adjust view angle as desired
+    #     plt.tight_layout()
+    #     plt.show()
+
+    # # --- Plot DGM as 3D Wireframe or Shaded surface ---
+    # print("\n--- Plotting DGM as 3D Wireframe (Optional) ---")
+    # wireframe_ax = plot_dgm_as_3d_surface(dgm_filepath, title="Digitales Geländemodell (DGM) - Wireframe", 
+    #                                       sample_factor=2, z_exaggeration=2.0, plot_type='wireframe') # surface / wireframe
+    # if wireframe_ax:
+    #     wireframe_ax.view_init(elev=45, azim=-60)
+    #     plt.tight_layout()
+    #     plt.show()
 
     # --- Calculate and Plot Terrain Metrics ---
     if dgm_data is not None and dgm_transform is not None:
         # --- Roughness ---
-        roughness_map = calculate_roughness(dgm_data, window_size=5) # Adjust window_size (e.g., 3-11)
+        roughness_map = calculate_roughness(dgm_data, window_size=3) # Adjust window_size (e.g., 3-11)
         plot_2d_raster(roughness_map, 'DGM Roughness (Std Dev)', cmap='hot', cbar_label='Std Dev of Elevation (m)')
 
         # --- Local Relief ---
-        local_relief_map = calculate_local_relief(dgm_data, window_size=7) # Adjust window_size
+        local_relief_map = calculate_local_relief(dgm_data, window_size=5) # Adjust window_size
         plot_2d_raster(local_relief_map, 'DGM Local Relief (Max - Min)', cmap='YlOrRd', cbar_label='Elevation Range (m)')
 
         # --- Slope ---

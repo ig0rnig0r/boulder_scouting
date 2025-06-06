@@ -267,10 +267,12 @@ def plot_2d_raster(data, title, cmap='viridis', figsize=(10, 10), cbar_label='Va
 # --- Main Execution ---
 if __name__ == "__main__":
     # --- IMPORTANT: Replace this with your actual DGM file path ---
-    dgm_filepath = 'data/maltatal/steinbruch/dgm_4622-5002a.tif'
+    # dgm_filepath = 'data/maltatal/steinbruch/dgm_4622-5002a.tif'
     # dgm_filepath = 'data/maltatal/schleierwasserfall/dgm_4621-5103a.tif'
     # dgm_filepath = 'data/vassach/dgm_5017-5002a.tif'
     # dgm_filepath = 'data/zajesera/dgm_4916-5002a.tif'
+    # dgm_filepath = 'data/schütt/dgm_4916-5000c.tif'
+    dgm_filepath = 'data/obergail/dgm_4117-5101c.tif'
 
     # --- Load DGM Data ---
     dgm_data = None
@@ -322,14 +324,14 @@ if __name__ == "__main__":
         plot_2d_raster(slope_map, 'DGM Slope', cmap='Greys_r', cbar_label='Slope (degrees)') # Greys_r for darker steep areas
 
         # --- Combined thresholding with max_boulder_height ---
-        threshold_roughness = 0.5
-        threshold_relief = 3.0      # Minimum local relief (meters)
-        threshold_slope = 60        # Degrees, try 15-35
-        max_boulder_height = 6.0    # Maximum local relief (meters) for a boulder
+        threshold_roughness = 0.1
+        min_boulder_height = 2.0      # Minimum local relief (meters)
+        threshold_slope = 60          # Degrees, try 15-35
+        max_boulder_height = 5.0      # Maximum local relief (meters) for a boulder
 
         combined_mask = (
             (roughness_map > threshold_roughness) &
-            (local_relief_map > threshold_relief) &
+            (local_relief_map > min_boulder_height) &
             (local_relief_map < max_boulder_height) &  # Exclude big cliffs
             (slope_map > threshold_slope)
         )
@@ -347,8 +349,8 @@ if __name__ == "__main__":
         print(f"Found {num_features} potential boulder clusters.")
 
         # Filter by size (area in pixels) to remove noise and large clusters (cliffs)
-        min_boulder_size = 1     # Minimum area (pixels)
-        max_boulder_size = 5    # Maximum area (pixels), adjust as needed
+        min_boulder_size = 0     # Minimum area (pixels)
+        max_boulder_size = 12    # Maximum area (pixels), adjust as needed
 
         boulder_slices = find_objects(labeled)
         filtered_mask = np.zeros_like(combined_mask)
@@ -439,6 +441,9 @@ if __name__ == "__main__":
     print("The next steps involve refining these thresholds, applying more advanced segmentation,")
     print("and leveraging your reference boulder data for machine learning.")
 
+
+
+
     # # --- Sweep parameters ---
     # window_sizes = range(2, 4)  # 2 to 7 inclusive
     # threshold_slopes = range(65, 73)  # 15 to 25 inclusive
@@ -456,20 +461,20 @@ if __name__ == "__main__":
     #     for threshold_slope in threshold_slopes:
     #         slope_map = calculate_slope(dgm_data, dgm_transform)
 
-    #         threshold_roughness = 0.5
-    #         threshold_relief = 3.0
-    #         max_boulder_height = 6.0
+    #         threshold_roughness = 0.3
+    #         min_boulder_height = 2.0
+    #         max_boulder_height = 4.0
 
     #         combined_mask = (
     #             (roughness_map > threshold_roughness) &
-    #             (local_relief_map > threshold_relief) &
+    #             (local_relief_map > min_boulder_height) &
     #             (local_relief_map < max_boulder_height) &
     #             (slope_map > threshold_slope)
     #         )
 
     #         labeled, num_features = label(combined_mask)
-    #         min_boulder_size = 1      # Minimum area (pixels)
-    #         max_boulder_size = 5      # Maximum area (pixels), adjust as needed
+    #         min_boulder_size = 2      # Minimum area (pixels)
+    #         max_boulder_size = 12      # Maximum area (pixels), adjust as needed
 
     #         boulder_slices = find_objects(labeled)
     #         filtered_mask = np.zeros_like(combined_mask)

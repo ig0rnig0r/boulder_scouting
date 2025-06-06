@@ -3,6 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from scipy.ndimage import generic_filter, uniform_filter, label, find_objects # For roughness, local relief, and potential slope smoothing
+import os
 
 def plot_dgm_as_3d_points(filepath, title="Digitales Geländemodell (DGM)", 
                           ax=None, sample_factor=5, z_exaggeration=1.0, 
@@ -213,7 +214,7 @@ def calculate_slope(dem_data, transform):
 
     # Use a smoothed version of the DEM data for more robust slope calculation
     # A small uniform filter can help reduce noise that would result in spiky slopes.
-    smoothed_dem = uniform_filter(np.nan_to_num(dem_data, nan=np.nanmean(dem_data)), size=3) # 3x3 filter
+    smoothed_dem = uniform_filter(np.nan_to_num(dem_data, nan=np.nanmean(dem_data)), size=1) # 3x3 filter
     
     dz_dy, dz_dx = np.gradient(smoothed_dem, dy, dx) # Order matters for np.gradient output (rows, cols)
     
@@ -261,14 +262,12 @@ def plot_2d_raster(data, title, cmap='viridis', figsize=(10, 10), cbar_label='Va
 # --- Main Execution ---
 if __name__ == "__main__":
     # --- IMPORTANT: Replace this with your actual DGM file path ---
-    dgm_filepath = 'data/maltatal/steinbruch/dgm_4622-5002a.tif'
-    # dgm_filepath = 'data/maltatal/schleierwasserfall/dgm_4621-5103a.tif'
+    # dgm_filepath = 'data/maltatal/steinbruch/dgm_4622-5002a.tif'
+    dgm_filepath = 'data/maltatal/schleierwasserfall/dgm_4621-5103a.tif'
     # dgm_filepath = 'data/vassach/dgm_5017-5002a.tif'
     # dgm_filepath = 'data/zajesera/dgm_4916-5002a.tif'
 
     # --- Load DGM Data ---
-    # We need to load the full DGM data to pass to calculation functions,
-    # and also its transform for slope calculation.
     dgm_data = None
     dgm_transform = None
     dgm_profile = None
@@ -278,7 +277,6 @@ if __name__ == "__main__":
             dgm_data = src.read(1)
             dgm_transform = src.transform
             dgm_profile = src.profile
-            # Handle NoData values for calculations
             nodata_val = dgm_profile.get('nodata')
             if nodata_val is not None:
                 dgm_data = np.where(dgm_data == nodata_val, np.nan, dgm_data)
@@ -287,7 +285,7 @@ if __name__ == "__main__":
     except rasterio.errors.RasterioIOError as e:
         print(f"Error loading DGM for calculations {dgm_filepath}: {e}")
         print("Exiting script as DGM data is essential.")
-        exit() # Exit if DGM data cannot be loaded
+        exit()
 
     # # --- Plot DGM (3D Point Cloud) ---
     # print("\n--- Plotting DGM (3D Point Cloud) ---")
@@ -306,74 +304,138 @@ if __name__ == "__main__":
     #     plt.tight_layout()
     #     plt.show()
 
-    # --- Calculate and Plot Terrain Metrics ---
-    if dgm_data is not None and dgm_transform is not None:
-        # --- Calculate metrics ---
-        roughness_map = calculate_roughness(dgm_data, window_size=3)
-        # plot_2d_raster(roughness_map, 'DGM Roughness (Std Dev)', cmap='hot', cbar_label='Std Dev of Elevation (m)')
+    # # --- Calculate and Plot Terrain Metrics ---
+    # if dgm_data is not None and dgm_transform is not None:
+    #     # --- Calculate metrics ---
+    #     roughness_map = calculate_roughness(dgm_data, window_size=1)
+    #     # plot_2d_raster(roughness_map, 'DGM Roughness (Std Dev)', cmap='hot', cbar_label='Std Dev of Elevation (m)')
 
-        local_relief_map = calculate_local_relief(dgm_data, window_size=5)
-        # plot_2d_raster(local_relief_map, 'DGM Local Relief (Max - Min)', cmap='YlOrRd', cbar_label='Elevation Range (m)')
+    #     local_relief_map = calculate_local_relief(dgm_data, window_size=3)
+    #     # plot_2d_raster(local_relief_map, 'DGM Local Relief (Max - Min)', cmap='YlOrRd', cbar_label='Elevation Range (m)')
 
-        slope_map = calculate_slope(dgm_data, dgm_transform)
-        # plot_2d_raster(slope_map, 'DGM Slope', cmap='Greys_r', cbar_label='Slope (degrees)') # Greys_r for darker steep areas
+    #     slope_map = calculate_slope(dgm_data, dgm_transform)
+    #     plot_2d_raster(slope_map, 'DGM Slope', cmap='Greys_r', cbar_label='Slope (degrees)') # Greys_r for darker steep areas
 
-        # --- Combined thresholding with max_boulder_height ---
-        threshold_roughness = 0.5
-        threshold_relief = 1.0      # Minimum local relief (meters)
-        threshold_slope = 40        # Degrees, try 15-35
-        max_boulder_height = 4.0    # Maximum local relief (meters) for a boulder
+    #     # --- Combined thresholding with max_boulder_height ---
+    #     threshold_roughness = 0.5
+    #     threshold_relief = 3.0      # Minimum local relief (meters)
+    #     threshold_slope = 60        # Degrees, try 15-35
+    #     max_boulder_height = 6.0    # Maximum local relief (meters) for a boulder
 
-        combined_mask = (
-            (roughness_map > threshold_roughness) &
-            (local_relief_map > threshold_relief) &
-            (local_relief_map < max_boulder_height) &  # Exclude big cliffs
-            (slope_map > threshold_slope)
-        )
+    #     combined_mask = (
+    #         (roughness_map > threshold_roughness) &
+    #         (local_relief_map > threshold_relief) &
+    #         (local_relief_map < max_boulder_height) &  # Exclude big cliffs
+    #         (slope_map > threshold_slope)
+    #     )
 
-        plt.figure(figsize=(10, 10))
-        plt.imshow(combined_mask, cmap='Greens', origin='upper')
-        plt.title('Potential Boulder Areas (Combined Metrics, Height Limited)')
-        plt.xlabel('X (pixels)')
-        plt.ylabel('Y (pixels)')
-        plt.tight_layout()
-        plt.show()
+    #     plt.figure(figsize=(10, 10))
+    #     plt.imshow(combined_mask, cmap='Greens', origin='upper')
+    #     plt.title('Potential Boulder Areas (Combined Metrics, Height Limited)')
+    #     plt.xlabel('X (pixels)')
+    #     plt.ylabel('Y (pixels)')
+    #     plt.tight_layout()
+    #     plt.show()
 
-        # --- Boulder Candidate Clustering ---
-        labeled, num_features = label(combined_mask)
-        print(f"Found {num_features} potential boulder clusters.")
+    #     # --- Boulder Candidate Clustering ---
+    #     labeled, num_features = label(combined_mask)
+    #     print(f"Found {num_features} potential boulder clusters.")
 
-        # Optionally, filter by size (area in pixels)
-        min_boulder_size = 5
-        boulder_slices = find_objects(labeled)
-        filtered_mask = np.zeros_like(combined_mask)
-        for i, slc in enumerate(boulder_slices):
-            if slc is not None:
-                region = (labeled[slc] == (i+1))
-                if np.sum(region) >= min_boulder_size:
-                    filtered_mask[slc][region] = True
+    #     # Optionally, filter by size (area in pixels)
+    #     min_boulder_size = 3
+    #     boulder_slices = find_objects(labeled)
+    #     filtered_mask = np.zeros_like(combined_mask)
+    #     for i, slc in enumerate(boulder_slices):
+    #         if slc is not None:
+    #             region = (labeled[slc] == (i+1))
+    #             if np.sum(region) >= min_boulder_size:
+    #                 filtered_mask[slc][region] = True
 
-        plt.figure(figsize=(10, 10))
-        plt.imshow(filtered_mask, cmap='Blues', origin='upper')
-        plt.title('Filtered Boulder Candidates (min size)')
-        plt.show()
+    #     plt.figure(figsize=(10, 10))
+    #     plt.imshow(filtered_mask, cmap='Blues', origin='upper')
+    #     plt.title('Filtered Boulder Candidates (min size)')
+    #     plt.show()
 
-        # --- Improved Visualization: Overlay boulder candidates in red on local relief ---
-        background = local_relief_map  # Or use dgm_data or slope_map for different context
+    #     # --- Improved Visualization: Overlay boulder candidates in red on local relief ---
+    #     background = local_relief_map  # Or use dgm_data or slope_map for different context
 
-        plt.figure(figsize=(12, 12))
-        plt.imshow(background, cmap='gray', origin='upper')
-        plt.imshow(
-            np.ma.masked_where(filtered_mask == 0, filtered_mask),
-            cmap='Reds', alpha=0.7, origin='upper'
-        )
-        plt.title('Filtered Boulder Candidates (highlighted in red)')
-        plt.xlabel('X (pixels)')
-        plt.ylabel('Y (pixels)')
-        plt.colorbar(label='Local Relief (m)')
-        plt.tight_layout()
-        plt.show()
+    #     plt.figure(figsize=(12, 12))
+    #     plt.imshow(background, cmap='gray', origin='upper')
+    #     plt.imshow(
+    #         np.ma.masked_where(filtered_mask == 0, filtered_mask),
+    #         cmap='Reds', alpha=0.7, origin='upper'
+    #     )
+    #     plt.title('Filtered Boulder Candidates (highlighted in red)')
+    #     plt.xlabel('X (pixels)')
+    #     plt.ylabel('Y (pixels)')
+    #     plt.colorbar(label='Local Relief (m)')
+    #     plt.tight_layout()
+    #     plt.show()
 
-    print("\n--- DGM processing and metric calculations complete. ---")
-    print("The next steps involve refining these thresholds, applying more advanced segmentation,")
-    print("and leveraging your reference boulder data for machine learning.")
+    # print("\n--- DGM processing and metric calculations complete. ---")
+    # print("The next steps involve refining these thresholds, applying more advanced segmentation,")
+    # print("and leveraging your reference boulder data for machine learning.")
+
+    # --- Sweep parameters ---
+    window_sizes = range(2, 8)  # 2 to 7 inclusive
+    threshold_slopes = range(60, 90)  # 15 to 25 inclusive
+
+    # Create output directory for sweep results
+    output_dir = "boulder_sweep_results"
+    os.makedirs(output_dir, exist_ok=True)
+
+    # --- Calculate roughness once (window size 2 for speed, or adjust as needed) ---
+    roughness_map = calculate_roughness(dgm_data, window_size=2)
+
+    # --- Sweep ---
+    for window_size in window_sizes:
+        local_relief_map = calculate_local_relief(dgm_data, window_size=window_size)
+        for threshold_slope in threshold_slopes:
+            slope_map = calculate_slope(dgm_data, dgm_transform)
+
+            threshold_roughness = 0.5
+            threshold_relief = 3.0
+            max_boulder_height = 6.0
+
+            combined_mask = (
+                (roughness_map > threshold_roughness) &
+                (local_relief_map > threshold_relief) &
+                (local_relief_map < max_boulder_height) &
+                (slope_map > threshold_slope)
+            )
+
+            labeled, num_features = label(combined_mask)
+            min_boulder_size = 5
+            boulder_slices = find_objects(labeled)
+            filtered_mask = np.zeros_like(combined_mask)
+            for i, slc in enumerate(boulder_slices):
+                if slc is not None:
+                    region = (labeled[slc] == (i+1))
+                    if np.sum(region) >= min_boulder_size:
+                        filtered_mask[slc][region] = True
+
+            # --- Improved Visualization: Overlay boulder candidates in red on local relief ---
+            background = local_relief_map
+
+            plt.figure(figsize=(12, 12))
+            plt.imshow(background, cmap='gray', origin='upper')
+            plt.imshow(
+                np.ma.masked_where(filtered_mask == 0, filtered_mask),
+                cmap='Reds', alpha=0.7, origin='upper'
+            )
+            plt.title(f'Boulders (window={window_size}, slope>{threshold_slope})')
+            plt.xlabel('X (pixels)')
+            plt.ylabel('Y (pixels)')
+            plt.colorbar(label='Local Relief (m)')
+            plt.tight_layout()
+
+            # Save figure
+            out_path = os.path.join(
+                output_dir,
+                f"boulders_win{window_size}_slope{threshold_slope}.png"
+            )
+            plt.savefig(out_path)
+            plt.close()
+
+    print(f"\n--- Sweep complete. Plots saved in '{output_dir}' ---")
+    # Comment out all other plots above (already done)

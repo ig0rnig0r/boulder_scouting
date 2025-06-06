@@ -356,6 +356,22 @@ if __name__ == "__main__":
         plt.title('Filtered Boulder Candidates (min size)')
         plt.show()
 
+        # --- Improved Visualization: Overlay boulder candidates in red on local relief ---
+        background = local_relief_map  # Or use dgm_data or slope_map for different context
+
+        plt.figure(figsize=(12, 12))
+        plt.imshow(background, cmap='gray', origin='upper')
+        plt.imshow(
+            np.ma.masked_where(filtered_mask == 0, filtered_mask),
+            cmap='Reds', alpha=0.7, origin='upper'
+        )
+        plt.title('Filtered Boulder Candidates (highlighted in red)')
+        plt.xlabel('X (pixels)')
+        plt.ylabel('Y (pixels)')
+        plt.colorbar(label='Local Relief (m)')
+        plt.tight_layout()
+        plt.show()
+
     print("\n--- DGM processing and metric calculations complete. ---")
     print("The next steps involve refining these thresholds, applying more advanced segmentation,")
     print("and leveraging your reference boulder data for machine learning.")

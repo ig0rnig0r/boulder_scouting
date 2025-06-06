@@ -261,8 +261,8 @@ def plot_2d_raster(data, title, cmap='viridis', figsize=(10, 10), cbar_label='Va
 # --- Main Execution ---
 if __name__ == "__main__":
     # --- IMPORTANT: Replace this with your actual DGM file path ---
-    # dgm_filepath = 'data/maltatal/steinbruch/dgm_4622-5002a.tif'
-    dgm_filepath = 'data/maltatal/schleierwasserfall/dgm_4621-5103a.tif'
+    dgm_filepath = 'data/maltatal/steinbruch/dgm_4622-5002a.tif'
+    # dgm_filepath = 'data/maltatal/schleierwasserfall/dgm_4621-5103a.tif'
     # dgm_filepath = 'data/vassach/dgm_5017-5002a.tif'
     # dgm_filepath = 'data/zajesera/dgm_4916-5002a.tif'
 
@@ -318,20 +318,22 @@ if __name__ == "__main__":
         slope_map = calculate_slope(dgm_data, dgm_transform)
         # plot_2d_raster(slope_map, 'DGM Slope', cmap='Greys_r', cbar_label='Slope (degrees)') # Greys_r for darker steep areas
 
-        # --- Combined thresholding ---
+        # --- Combined thresholding with max_boulder_height ---
         threshold_roughness = 0.5
-        threshold_relief = 1.0      # Try different values!
-        threshold_slope = 20        # Degrees, try 15-35
+        threshold_relief = 1.0      # Minimum local relief (meters)
+        threshold_slope = 40        # Degrees, try 15-35
+        max_boulder_height = 4.0    # Maximum local relief (meters) for a boulder
 
         combined_mask = (
             (roughness_map > threshold_roughness) &
             (local_relief_map > threshold_relief) &
+            (local_relief_map < max_boulder_height) &  # Exclude big cliffs
             (slope_map > threshold_slope)
         )
 
         plt.figure(figsize=(10, 10))
         plt.imshow(combined_mask, cmap='Greens', origin='upper')
-        plt.title('Potential Boulder Areas (Combined Metrics)')
+        plt.title('Potential Boulder Areas (Combined Metrics, Height Limited)')
         plt.xlabel('X (pixels)')
         plt.ylabel('Y (pixels)')
         plt.tight_layout()

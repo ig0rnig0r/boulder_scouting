@@ -2,7 +2,7 @@ import rasterio
 import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
-from scipy.ndimage import generic_filter, uniform_filter # For roughness, local relief, and potential slope smoothing
+from scipy.ndimage import generic_filter, uniform_filter, label, find_objects # For roughness, local relief, and potential slope smoothing
 
 def plot_dgm_as_3d_points(filepath, title="Digitales Geländemodell (DGM)", 
                           ax=None, sample_factor=5, z_exaggeration=1.0, 
@@ -308,35 +308,52 @@ if __name__ == "__main__":
 
     # --- Calculate and Plot Terrain Metrics ---
     if dgm_data is not None and dgm_transform is not None:
-        # --- Roughness ---
-        roughness_map = calculate_roughness(dgm_data, window_size=3) # Adjust window_size (e.g., 3-11)
-        plot_2d_raster(roughness_map, 'DGM Roughness (Std Dev)', cmap='hot', cbar_label='Std Dev of Elevation (m)')
+        # --- Calculate metrics ---
+        roughness_map = calculate_roughness(dgm_data, window_size=3)
+        # plot_2d_raster(roughness_map, 'DGM Roughness (Std Dev)', cmap='hot', cbar_label='Std Dev of Elevation (m)')
 
-        # --- Local Relief ---
-        local_relief_map = calculate_local_relief(dgm_data, window_size=5) # Adjust window_size
-        plot_2d_raster(local_relief_map, 'DGM Local Relief (Max - Min)', cmap='YlOrRd', cbar_label='Elevation Range (m)')
+        local_relief_map = calculate_local_relief(dgm_data, window_size=5)
+        # plot_2d_raster(local_relief_map, 'DGM Local Relief (Max - Min)', cmap='YlOrRd', cbar_label='Elevation Range (m)')
 
-        # --- Slope ---
         slope_map = calculate_slope(dgm_data, dgm_transform)
-        plot_2d_raster(slope_map, 'DGM Slope', cmap='Greys_r', cbar_label='Slope (degrees)') # Greys_r for darker steep areas
+        # plot_2d_raster(slope_map, 'DGM Slope', cmap='Greys_r', cbar_label='Slope (degrees)') # Greys_r for darker steep areas
 
-        # --- Basic Thresholding (Initial "Segmentation" Idea) ---
-        print("\n--- Applying basic thresholding on Roughness for potential boulder areas ---")
-        # You'll need to experiment with this threshold!
-        # A good starting point might be a few times the typical background noise std dev.
-        # This is a very rough initial filter, not a full segmentation.
-        threshold_roughness = 0.5 # Example: areas with std dev > 0.5m might be boulders
-        
-        # Create a binary map: True where roughness is above threshold, False otherwise
-        potential_boulders_mask = (roughness_map > threshold_roughness)
+        # --- Combined thresholding ---
+        threshold_roughness = 0.5
+        threshold_relief = 1.0      # Try different values!
+        threshold_slope = 20        # Degrees, try 15-35
 
-        # Plot the binary mask
+        combined_mask = (
+            (roughness_map > threshold_roughness) &
+            (local_relief_map > threshold_relief) &
+            (slope_map > threshold_slope)
+        )
+
         plt.figure(figsize=(10, 10))
-        plt.imshow(potential_boulders_mask, cmap='Greys', origin='upper') # Greys_r would show boulders as white
-        plt.title(f'Potential Boulder Areas (Roughness > {threshold_roughness:.2f} m)')
+        plt.imshow(combined_mask, cmap='Greens', origin='upper')
+        plt.title('Potential Boulder Areas (Combined Metrics)')
         plt.xlabel('X (pixels)')
         plt.ylabel('Y (pixels)')
         plt.tight_layout()
+        plt.show()
+
+        # --- Boulder Candidate Clustering ---
+        labeled, num_features = label(combined_mask)
+        print(f"Found {num_features} potential boulder clusters.")
+
+        # Optionally, filter by size (area in pixels)
+        min_boulder_size = 5
+        boulder_slices = find_objects(labeled)
+        filtered_mask = np.zeros_like(combined_mask)
+        for i, slc in enumerate(boulder_slices):
+            if slc is not None:
+                region = (labeled[slc] == (i+1))
+                if np.sum(region) >= min_boulder_size:
+                    filtered_mask[slc][region] = True
+
+        plt.figure(figsize=(10, 10))
+        plt.imshow(filtered_mask, cmap='Blues', origin='upper')
+        plt.title('Filtered Boulder Candidates (min size)')
         plt.show()
 
     print("\n--- DGM processing and metric calculations complete. ---")

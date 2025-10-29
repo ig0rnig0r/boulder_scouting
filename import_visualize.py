@@ -302,14 +302,14 @@ if __name__ == "__main__":
     #     plt.tight_layout()
     #     plt.show()
 
-    # # --- Plot DGM as 3D Wireframe or Shaded surface ---
-    # print("\n--- Plotting DGM as 3D Wireframe (Optional) ---")
-    # wireframe_ax = plot_dgm_as_3d_surface(dgm_filepath, title="Digitales Geländemodell (DGM) - Wireframe", 
-    #                                       sample_factor=2, z_exaggeration=2.0, plot_type='wireframe') # surface / wireframe
-    # if wireframe_ax:
-    #     wireframe_ax.view_init(elev=45, azim=-60)
-    #     plt.tight_layout()
-    #     plt.show()
+    # --- Plot DGM as 3D Wireframe or Shaded surface ---
+    print("\n--- Plotting DGM as 3D Wireframe (Optional) ---")
+    wireframe_ax = plot_dgm_as_3d_surface(dgm_filepath, title="Digitales Geländemodell (DGM) - Wireframe", 
+                                          sample_factor=2, z_exaggeration=2.0, plot_type='wireframe') # surface / wireframe
+    if wireframe_ax:
+        wireframe_ax.view_init(elev=45, azim=-60)
+        plt.tight_layout()
+        plt.show()
 
     # --- Calculate and Plot Terrain Metrics ---
     if dgm_data is not None and dgm_transform is not None:
